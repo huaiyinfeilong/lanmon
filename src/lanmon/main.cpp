@@ -78,11 +78,6 @@ void EnumComputers(LPNETRESOURCE lpNetResource, LPARAM lParam)
 	{
 		for (DWORD i = 0; i < dwCount; i++)
 		{
-			if ((lpNetResourceList[i].dwUsage & RESOURCEUSAGE_CONTAINER) == RESOURCEUSAGE_CONTAINER)
-			{
-				EnumComputers(lpNetResourceList + i, lParam);
-				continue;
-			}
 			if (lpNetResourceList[i].lpRemoteName)
 			{
 				HWND hwndCtrl = (HWND)lParam;
@@ -92,6 +87,10 @@ void EnumComputers(LPNETRESOURCE lpNetResource, LPARAM lParam)
 				lvItem.iItem = ListView_GetItemCount(hwndCtrl);
 				lvItem.iSubItem = 0;
 				ListView_InsertItem(hwndCtrl, &lvItem);
+			}
+			if ((lpNetResourceList[i].dwUsage & RESOURCEUSAGE_CONTAINER) == RESOURCEUSAGE_CONTAINER)
+			{
+				EnumComputers(lpNetResourceList + i, lParam);
 			}
 		}
 	}
