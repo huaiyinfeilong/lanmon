@@ -1,5 +1,5 @@
 #include <tchar.h>
-#include <windows.h>
+#include <winsock2.h>
 #include <commctrl.h>
 #include <winnetwk.h>
 #include "resource.h"
@@ -16,7 +16,12 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 	UNREFERENCED_PARAMETER(lpCmdLine);
 	UNREFERENCED_PARAMETER(nCmdShow);
 
+	WSADATA wsaData = {0};
+	WSAStartup(MAKEWORD(2, 2), &wsaData);
+
 	DialogBox(hInstance, MAKEINTRESOURCE(IDD_DIALOG_MAIN), NULL, DlgProc);
+
+	WSACleanup();
 
 	return 0;
 }
@@ -73,24 +78,35 @@ void EnumComputers(LPNETRESOURCE lpNetResource, LPARAM lParam)
 	lpNetResourceList = (LPNETRESOURCE)new char[dwBufferSize];
 	memset(lpNetResourceList, 0, dwBufferSize);
 
-	WNetOpenEnum(RESOURCE_GLOBALNET, NULL, NULL, lpNetResource, &hEnum);
+	WNetOpenEnum(RESOURCE_CONTEXT, NULL, NULL, lpNetResource, &hEnum);
 	if (WNetEnumResource(hEnum, &dwCount, lpNetResourceList, &dwBufferSize) == NO_ERROR)
 	{
 		for (DWORD i = 0; i < dwCount; i++)
 		{
-			if (lpNetResourceList[i].lpRemoteName)
+			if (lpNetResourceList[i].dwUsage == RESOURCEUSAGE_CONTAINER && lpNetResourceList[i].dwType == RESOURCETYPE_ANY && lpNetResourceList[i].lpRemoteName && lpNetResourceList[i].lpRemoteName[0] == TEXT('\\') && lpNetResourceList[i].lpRemoteName[1] == TEXT('\\'))
 			{
 				HWND hwndCtrl = (HWND)lParam;
 				LVITEM lvItem = {0};
 				lvItem.mask = LVIF_TEXT;
-				lvItem.pszText = lpNetResourceList[i].lpRemoteName;
+				lvItem.pszText = lpNetResourceList[i].lpRemoteName + 2;
 				lvItem.iItem = ListView_GetItemCount(hwndCtrl);
 				lvItem.iSubItem = 0;
 				ListView_InsertItem(hwndCtrl, &lvItem);
-			}
-			if ((lpNetResourceList[i].dwUsage & RESOURCEUSAGE_CONTAINER) == RESOURCEUSAGE_CONTAINER)
-			{
-				EnumComputers(lpNetResourceList + i, lParam);
+				HOSTENT *host = NULL;
+				char szHostName[MAX_PATH] = {0};
+				WideCharToMultiByte(CP_ACP, 0, lvItem.pszText, -1, szHostName, MAX_PATH, NULL, NULL);
+				host = gethostbyname(szHostName);
+				if (host == NULL)
+				{
+
+					continue;				}
+				TCHAR wszIpAddress[MAX_PATH] = {0};
+				char szIpAddress[MAX_PATH] = {0};
+				strcpy(szIpAddress, inet_ntoa(*((in_addr *)host->h_addr_list[0])));
+				MultiByteToWideChar(CP_ACP, NULL, szIpAddress, -1, wszIpAddress, MAX_PATH);
+				lvItem.pszText = wszIpAddress;
+				lvItem.iSubItem = 1;
+				ListView_SetItem(hwndCtrl, &lvItem);
 			}
 		}
 	}
