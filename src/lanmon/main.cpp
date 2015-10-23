@@ -1,13 +1,12 @@
 #include <tchar.h>
-//#include <windows.h>
-#include <winsock2.h>
+#include <windows.h>
 #include <commctrl.h>
 #include <winnetwk.h>
 #include "resource.h"
 
-#pragma comment(lib, "ws2_32.lib")
 
 INT_PTR CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+void EnumComputers(LPNETRESOURCE lpNetResource, LPARAM lParam);
 
 
 int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
@@ -44,40 +43,7 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		lvColumn.cx = 200;
 		lvColumn.iSubItem = 2;
 		ListView_InsertColumn(hwndCtrl, 2, &lvColumn);
-
-		HANDLE hEnum = NULL;
-		DWORD dwCount = -1;
-		LPNETRESOURCE lpNetResource = NULL;
-		DWORD dwBufferSize = MAX_PATH * sizeof(NETRESOURCE);
-		lpNetResource = (LPNETRESOURCE)new char[dwBufferSize];
-		memset(lpNetResource, 0, dwBufferSize);
-		WSADATA wsaData = {0};
-		WSAStartup(MAKEWORD(2, 2), &wsaData);
-		WNetOpenEnum(RESOURCE_CONTEXT, NULL, NULL, NULL, &hEnum);
-		if (WNetEnumResource(hEnum, &dwCount, lpNetResource, &dwBufferSize) == NO_ERROR)
-		{
-			int j = 0;
-			for (int i = 0; i < dwCount; i++)
-			{
-				if (lpNetResource[i].lpRemoteName == NULL)
-				{
-					continue;
-				}
-				LVITEM lvItem = {0};
-				lvItem.mask = LVIF_TEXT;
-				lvItem.pszText = lpNetResource[i].lpRemoteName;
-				if (lvItem.pszText[0] == TEXT('\\') && lvItem.pszText[1] == TEXT('\\'))
-				{
-					lvItem.pszText = lvItem.pszText + 2;
-				}
-				lvItem.iItem = j++;
-				lvItem.iSubItem = 0;
-				ListView_InsertItem(hwndCtrl, &lvItem);
-			}
-		}
-		WNetCloseEnum(hEnum);
-		delete []lpNetResource;
-		lpNetResource = NULL;
+		EnumComputers(NULL, (LPARAM)hwndCtrl);
 		return TRUE;
 	}
 	break;
@@ -94,4 +60,40 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	}
 
 	return FALSE;
+}
+
+
+void EnumComputers(LPNETRESOURCE lpNetResource, LPARAM lParam)
+{
+	HANDLE hEnum = NULL;
+	DWORD dwCount = -1;
+	LPNETRESOURCE lpNetResourceList = NULL;
+	DWORD dwBufferSize = 64 * 1024;
+
+	lpNetResourceList = (LPNETRESOURCE)new char[dwBufferSize];
+	memset(lpNetResourceList, 0, dwBufferSize);
+
+	WNetOpenEnum(RESOURCE_GLOBALNET, NULL, NULL, lpNetResource, &hEnum);
+	if (WNetEnumResource(hEnum, &dwCount, lpNetResourceList, &dwBufferSize) == NO_ERROR)
+	{
+		for (DWORD i = 0; i < dwCount; i++)
+		{
+			if ((lpNetResourceList[i].dwUsage & RESOURCEUSAGE_CONTAINER) == RESOURCEUSAGE_CONTAINER)
+			{
+				EnumComputers(lpNetResourceList + i, lParam);
+				continue;
+			}
+			if (lpNetResourceList[i].lpRemoteName)
+			{
+				HWND hwndCtrl = (HWND)lParam;
+				LVITEM lvItem = {0};
+				lvItem.mask = LVIF_TEXT;
+				lvItem.pszText = lpNetResourceList[i].lpRemoteName;
+				lvItem.iItem = ListView_GetItemCount(hwndCtrl);
+				lvItem.iSubItem = 0;
+				ListView_InsertItem(hwndCtrl, &lvItem);
+			}
+		}
+	}
+	WNetCloseEnum(hEnum);
 }
